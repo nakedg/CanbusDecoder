@@ -21,7 +21,7 @@
 #include "Car.h"
 
 
-#define BUF_SIZE (1024)
+#define BUF_SIZE (128)
 
 #define TXD_PIN (GPIO_NUM_21)
 #define RXD_PIN (GPIO_NUM_20)
@@ -92,7 +92,7 @@ static void rx_task(void *arg)
 
     while (1) {
         //ESP_LOGI(RX_TASK_TAG, "Start read from rx");
-        const int rxBytes = uart_read_bytes(UART_NUM_1, data, BUF_SIZE, 1000 / portTICK_PERIOD_MS);
+        const int rxBytes = uart_read_bytes(UART_NUM_1, data, 16, 1000 / portTICK_PERIOD_MS);
         //ESP_LOGI(RX_TASK_TAG, "Read %d bytes", rxBytes);
         if (rxBytes > 0) {
             data[rxBytes] = 0;
@@ -120,6 +120,9 @@ static void canRecieveDataTask(void *arg)
             ESP_LOGE(TAG, "(%s)", esp_err_to_name(resCan));
             continue;
         }
+
+        ESP_LOGI(TAG, "Receive CAN message %X", (int)rx_msg.identifier);
+        ESP_LOG_BUFFER_HEXDUMP(TAG, rx_msg.data, 8, ESP_LOG_INFO);
 
         car->ProcessCanMessage(&rx_msg);
     }
