@@ -36,9 +36,16 @@ static const twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(TX_GPI
 
 static const char *TAG = "CAN Decoder";
 
+static CanboxRaiseHandler handler = {};
+static Car car = {};
+    
+
 
 void Init(void)
 {
+    car.InitCar();
+    handler.SetCar(&car);
+
     const uart_config_t uart_config = {
         .baud_rate = 38400,
         .data_bits = UART_DATA_8_BITS,
@@ -71,13 +78,13 @@ int sendData(const char* logName, const char* data)
 
 static void tx_task(void *arg)
 {
-    CanboxRaiseHandler* handler = (CanboxRaiseHandler*)arg;
+    //CanboxRaiseHandler* handler = (CanboxRaiseHandler*)arg;
     static const char *TX_TASK_TAG = "TX_TASK";
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
     while (1) {
         //sendData(TX_TASK_TAG, "Hello world");
         //ESP_LOGI(TX_TASK_TAG, "send tx bytes");
-        handler->SendCarState();
+        handler.SendCarState();
         vTaskDelay(500 / portTICK_PERIOD_MS);
     }
 }
@@ -87,57 +94,90 @@ static void rx_task(void *arg)
     static const char *RX_TASK_TAG = "RX_TASK";
     esp_log_level_set(RX_TASK_TAG, ESP_LOG_INFO);
     uint8_t* data = (uint8_t*) malloc(BUF_SIZE + 1);
-
-    CanboxRaiseHandler* handler = (CanboxRaiseHandler*)arg;
+    
+    //CanboxRaiseHandler* handler = (CanboxRaiseHandler*)arg;
 
     while (1) {
+        
         //ESP_LOGI(RX_TASK_TAG, "Start read from rx");
         const int rxBytes = uart_read_bytes(UART_NUM_1, data, 16, 1000 / portTICK_PERIOD_MS);
         //ESP_LOGI(RX_TASK_TAG, "Read %d bytes", rxBytes);
         if (rxBytes > 0) {
             data[rxBytes] = 0;
-            ESP_LOGI(RX_TASK_TAG, "Read %d bytes: '%s'", rxBytes, data);
-            ESP_LOG_BUFFER_HEXDUMP(RX_TASK_TAG, data, rxBytes, ESP_LOG_INFO);
+            //ESP_LOGI(RX_TASK_TAG, "Read %d bytes: '%s'", rxBytes, data);
+            //ESP_LOG_BUFFER_HEXDUMP(RX_TASK_TAG, data, rxBytes, ESP_LOG_INFO);
             for (size_t i = 0; i < rxBytes; i++)
             {
-                handler->CmdProcess(data[i]);
+                handler.CmdProcess(data[i]);
             }
             
         }
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }
     free(data);
 }
 
 static void canRecieveDataTask(void *arg)
 {
-    Car* car = (Car*)arg;
+    //Car* car = (Car*)arg;
+    uint8_t* data = (uint8_t*) malloc(BUF_SIZE + 1);
+    uint64_t counter = 0;
     while(1)
     {
         twai_message_t rx_msg;
-        esp_err_t resCan = twai_receive(&rx_msg, 5000);
+        //TickType_t ticks = xTaskGetTickCount();
+        //ESP_LOGI(TAG, "Ticks %i", (int)ticks);
+        esp_err_t resCan = twai_receive(&rx_msg, 10 / portTICK_PERIOD_MS);
+        counter++;
         if (resCan != ESP_OK)
         {
-            ESP_LOGE(TAG, "(%s)", esp_err_to_name(resCan));
-            continue;
+            //ESP_LOGE(TAG, "(%s)", esp_err_to_name(resCan));
+        }
+        else
+        {
+            //ESP_LOGI(TAG, "Receive CAN message %X", (int)rx_msg.identifier);
+            //ESP_LOG_BUFFER_HEXDUMP(TAG, rx_msg.data, 8, ESP_LOG_INFO);
+            car.ProcessCanMessage(&rx_msg);
         }
 
-        ESP_LOGI(TAG, "Receive CAN message %X", (int)rx_msg.identifier);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, rx_msg.data, 8, ESP_LOG_INFO);
+        if (counter % 1000 == 0)
+        {
+            ESP_LOGI(TAG, "TX start");
+            handler.SendCarState();
+        }
 
-        car->ProcessCanMessage(&rx_msg);
+        if ((counter) % 5000 == 0)
+        {
+            ESP_LOGI(TAG, "RX start");
+            const int rxBytes = uart_read_bytes(UART_NUM_1, data, 16, 10 / portTICK_PERIOD_MS);
+            //ESP_LOGI(RX_TASK_TAG, "Read %d bytes", rxBytes);
+            if (rxBytes > 0) {
+                data[rxBytes] = 0;
+                //ESP_LOGI(RX_TASK_TAG, "Read %d bytes: '%s'", rxBytes, data);
+                //ESP_LOG_BUFFER_HEXDUMP(RX_TASK_TAG, data, rxBytes, ESP_LOG_INFO);
+                for (size_t i = 0; i < rxBytes; i++)
+                {
+                    handler.CmdProcess(data[i]);
+                }
+                
+            }
+        }
+
+        if (counter == INT32_MAX) 
+        {
+            counter = 0;
+        }
     }
+    free(data);
 }
 
 extern "C" void app_main(void)
 {
     Init();
 
-    CanboxRaiseHandler handler = {};
-    Car car = {};
-    car.InitCar();
-    handler.SetCar(&car);
+    
 
-    xTaskCreate(rx_task, "uart_rx_task", 1024 * 2, (void*)&handler, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(tx_task, "uart_tx_task", 1024 * 2, (void*)&handler, configMAX_PRIORITIES - 2, NULL);
-    xTaskCreate(canRecieveDataTask, "canRecieveDataTask", 4096, (void*)&car, configMAX_PRIORITIES - 3, NULL);
+    //xTaskCreate(rx_task, "uart_rx_task", 1024 * 2, (void*)&handler, configMAX_PRIORITIES - 2, NULL);
+    //xTaskCreate(tx_task, "uart_tx_task", 1024 * 2, (void*)&handler, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(canRecieveDataTask, "canRecieveDataTask", 4096, NULL, configMAX_PRIORITIES - 3, NULL);
 }

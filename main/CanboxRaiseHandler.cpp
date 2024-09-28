@@ -7,12 +7,12 @@
 #define RX_BUFFER_SIZE 32
 static const char *TAG = "CanboxRaiseHandler";
 
-static int16_t scale(int16_t value, int16_t inMin, int16_t inMax, int16_t outMin, int16_t outMax)
+static float scale(float value, float inMin, float inMax, float outMin, float outMax)
 {
-  int16_t part1 = (value - inMin) * (outMax - outMin);
-  int16_t part2 = (inMax - inMin);
-  float res = ((float)part1 / (float)part2) + outMin;
-  return (int16_t)res;
+  float part1 = (value - inMin) * (outMax - outMin);
+  float part2 = (inMax - inMin);
+  float res = (part1 / part2) + outMin;
+  return res;
 }
 
 static uint8_t GetChecksum(uint8_t * buf, uint8_t len)
@@ -157,17 +157,17 @@ void CanboxRaiseHandler::CarInfoProcess()
     uint8_t t9 = (odo >> 16) & 0xff;
     uint8_t t10 = (odo >> 8) & 0xff;
     uint8_t t11 = odo & 0xff;
-    uint8_t t12 = _car->low_fuel_lvl;
+    uint8_t t12 = _car->fuel_lvl;
 
     uint8_t buf[13] = { 0x02, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12 };
 
     SendCanboxMessage(0x41, buf, sizeof(buf));
 
-    /*uint8_t state = 0;
+    uint8_t state = 0;
     static uint8_t low_state = 0;
 
-    uint8_t low_voltage = car_get_low_voltage();
-    uint8_t low_fuel = car_get_low_fuel_level();
+    uint8_t low_voltage = _car->low_voltage;
+    uint8_t low_fuel = _car->low_fuel_lvl;
 
     if (low_fuel)
         state |= 0x80;
@@ -179,13 +179,15 @@ void CanboxRaiseHandler::CarInfoProcess()
     if (state != low_state) {
 
         low_state = state;
-        snd_canbox_msg(0x41, buf_low, sizeof(buf_low));
-    }*/
+        SendCanboxMessage(0x41, buf_low, sizeof(buf_low));
+        ESP_LOGI(TAG, "Send low state %u", state);
+    }
 }
 
 void CanboxRaiseHandler::WheelInfoProcess()
 {
     int16_t sangle = scale(_car->wheel, -100, 100, -540, 540);
+    ESP_LOGI(TAG, "Wheel val %i, angle %i", _car->wheel, sangle);
     uint8_t wbuf[] = { (uint8_t)sangle, (uint8_t)(sangle >> 8) };
     SendCanboxMessage(0x26, wbuf, sizeof(wbuf));
 }

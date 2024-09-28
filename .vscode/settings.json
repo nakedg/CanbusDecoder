@@ -18,6 +18,7 @@
     "files.associations": {
         "gpio.h": "c",
         "stdio.h": "c",
-        "inttypes.h": "c"
+        "inttypes.h": "c",
+        "string_view": "cpp"
     }
 }

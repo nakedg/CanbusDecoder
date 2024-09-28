@@ -20,7 +20,7 @@ class Car
     uint32_t odometer;
     uint32_t voltage;
     uint8_t low_voltage;
-    uint32_t temp;
+    int32_t temp;
     uint8_t fuel_lvl;
     uint8_t low_fuel_lvl;
     void InitCar();
@@ -35,4 +35,5 @@ class Car
     void parseEngineTemp(const uint8_t *data);
     void parseFuelLevel(const uint8_t *data);
     void parseWheelPosition(const uint8_t *data);
+    void parseHandBrake(const uint8_t *data);
 };

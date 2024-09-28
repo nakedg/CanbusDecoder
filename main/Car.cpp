@@ -1,6 +1,8 @@
 #include "Car.h"
 #include "esp_log.h"
 
+static const char *TAG = "Car";
+
 static uint8_t getBit(const uint8_t *data, uint8_t pos)
 {
     uint8_t bytePos = pos / 8;
@@ -8,12 +10,12 @@ static uint8_t getBit(const uint8_t *data, uint8_t pos)
     return ((*(data + bytePos) >> bitPos) & 0x01);
 }
 
-static int16_t scale(int16_t value, int16_t inMin, int16_t inMax, int16_t outMin, int16_t outMax)
+static float scale(float value, float inMin, float inMax, float outMin, float outMax)
 {
-  int16_t part1 = (value - inMin) * (outMax - outMin);
-  int16_t part2 = (inMax - inMin);
-  float res = ((float)part1 / (float)part2) + outMin;
-  return (int16_t)res;
+  float part1 = (value - inMin) * (outMax - outMin);
+  float part2 = (inMax - inMin);
+  float res = (part1 / part2) + outMin;
+  return res;
 }
 
 static uint32_t getUInt(const uint8_t *data, uint8_t startPosition, uint8_t endPosition, bool intel = false)
@@ -49,18 +51,18 @@ static inline void put_hex_byte(char *buf, uint8_t byte)
 void Car::InitCar()
 {
   bonnet = 1;
-  fl_door = 1;
+  fl_door = 0;
   fr_door = 0;
   rl_door = 0;
   rr_door  = 1;
-  fuel_lvl = 10;
+  fuel_lvl = 0;
   low_fuel_lvl = 0;
-  odometer = 100;
+  odometer = 0;
   low_voltage = 0;
-  speed = 50;
-  taho = 70;
+  speed = 0;
+  taho = 0;
   wheel = 0;
-  temp = 30;
+  temp = 40;
   //writeDebugStream(F("Car inited\r\n"));
 }
 
@@ -89,6 +91,9 @@ void Car::ProcessCanMessage(const twai_message_t *frame)
   case 0xC6:
     parseWheelPosition(frame->data);
     break;
+  case 0x4F8:
+    parseHandBrake(frame->data);
+    break;
   default:
     break;
   }
@@ -99,6 +104,7 @@ void Car::parseDoors(const uint8_t *data)
   fr_door = getBit(data, 51);
   fl_door = getBit(data, 53);
   rl_door = rr_door = getBit(data, 57);
+  tailgate = getBit(data, 35);
 }
 
 void Car::parseEngineRpm(const uint8_t *data)
@@ -136,4 +142,14 @@ void Car::parseWheelPosition(const uint8_t *data)
   uint16_t val = getUInt(data, 0, 1);
   int16_t angle = scale(val, 27900, 37900, -100, 100);
   wheel = angle;
+  ESP_LOGI(TAG, "Angle %i, %i", val, angle);
+}
+
+void Car::parseHandBrake(const uint8_t *data)
+{
+   if (getBit(data, 3) == 1)
+    bonnet = 0;
+   else
+    bonnet = 1;
+   ESP_LOGI(TAG, "Bonnet %i", bonnet);
 }
