@@ -110,7 +110,7 @@ void Car::parseDoors(const uint8_t *data)
 void Car::parseEngineRpm(const uint8_t *data)
 {
   uint32_t rpm = getUInt(data, 0, 1);
-  taho = rpm / 10;
+  taho = rpm * 1.25 / 10;
 }
 
 void Car::parseSpeed(const uint8_t *data)
